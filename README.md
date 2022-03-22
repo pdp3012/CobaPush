@@ -1,2 +1,5 @@
 Nama : Pradipta Deska Pryanda
-Kelas : 6706213093
+
+NIM : 6706213093
+
+Kelas : D3IF 45-04
