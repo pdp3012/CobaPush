@@ -8,30 +8,66 @@ import json
 import csv
 from datetime import datetime
 import re
+import urllib3
+
+# Disable SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class BlibliScraper:
     def __init__(self):
         """
         Inisialisasi scraper dengan headers yang mirip browser
         """
+        # List User-Agent yang lebih bervariasi
+        self.user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
+        ]
+        
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+            'User-Agent': random.choice(self.user_agents),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9,id;q=0.8',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
             'Sec-Fetch-Dest': 'document',
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
-            'Cache-Control': 'max-age=0'
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'DNT': '1'
         }
         self.session = requests.Session()
         self.session.headers.update(self.headers)
+        
+        # Tambahkan referer dan origin
+        self.session.headers.update({
+            'Referer': 'https://www.blibli.com/',
+            'Origin': 'https://www.blibli.com'
+        })
+        
+        # Set session untuk tidak verify SSL
+        self.session.verify = False
+        
+        # Tambahkan adapter untuk mengatur connection pooling
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=10,
+            max_retries=3
+        )
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
 
     def build_search_url(self, keyword, page=1):
         """
-        Membangun URL pencarian Blibli
+        Membangun URL pencarian Blibli dengan format yang lebih akurat
         """
         encoded_keyword = quote(keyword)
         
@@ -45,6 +81,32 @@ class BlibliScraper:
         print(f"🔍 URL Pencarian: {search_url}")
         return search_url
 
+    def get_search_api_url(self, keyword, page=1):
+        """
+        Mencoba menggunakan API endpoint sebagai alternatif
+        """
+        encoded_keyword = quote(keyword)
+        api_url = f"https://www.blibli.com/backend/search/products?searchTerm={encoded_keyword}&start={page * 24}&itemPerPage=24"
+        return api_url
+
+    def get_alternative_search_urls(self, keyword, page=1):
+        """
+        Mendapatkan berbagai format URL pencarian sebagai alternatif
+        """
+        encoded_keyword = quote(keyword)
+        urls = [
+            f"https://www.blibli.com/cari/{encoded_keyword}",
+            f"https://www.blibli.com/search/{encoded_keyword}",
+            f"https://www.blibli.com/search?q={encoded_keyword}",
+            f"https://www.blibli.com/cari?q={encoded_keyword}",
+            f"https://www.blibli.com/search/products?q={encoded_keyword}"
+        ]
+        
+        if page > 1:
+            urls = [url + f"&page={page}" if "?" in url else url + f"?page={page}" for url in urls]
+            
+        return urls
+
     def get_page_content(self, url, max_retries=3):
         """
         Mendapatkan konten halaman dengan retry mechanism yang diperbaiki
@@ -53,11 +115,52 @@ class BlibliScraper:
             try:
                 print(f"🔄 Mengakses halaman (Percobaan {attempt + 1})...")
 
-                # Tambahkan random delay sebelum request
-                time.sleep(random.uniform(1, 3))
+                # Update User-Agent secara random untuk setiap request
+                self.session.headers.update({
+                    'User-Agent': random.choice(self.user_agents)
+                })
 
-                response = self.session.get(url, timeout=15)
-                response.raise_for_status()
+                # Tambahkan random delay sebelum request
+                time.sleep(random.uniform(2, 5))
+
+                # Coba akses homepage terlebih dahulu untuk mendapatkan cookies
+                if attempt == 0:
+                    try:
+                        print("🌐 Mengakses homepage untuk mendapatkan cookies...")
+                        home_response = self.session.get('https://www.blibli.com/', timeout=10)
+                        time.sleep(random.uniform(1, 2))
+                    except:
+                        pass
+
+                # Tambahkan headers tambahan untuk request
+                additional_headers = {
+                    'Referer': 'https://www.blibli.com/',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+                
+                response = self.session.get(url, headers=additional_headers, timeout=20)
+                
+                # Cek status code
+                if response.status_code == 403:
+                    print(f"🚫 403 Forbidden - Mencoba dengan teknik berbeda...")
+                    # Coba dengan teknik berbeda
+                    response = self.try_alternative_request(url)
+                    if response and response.status_code == 200:
+                        print(f"✅ Berhasil dengan teknik alternatif (Size: {len(response.content)} bytes)")
+                        return response
+                    
+                    # Jika masih gagal, coba dengan session baru
+                    print("🔄 Mencoba dengan session baru...")
+                    new_session = self.create_new_session()
+                    try:
+                        response = new_session.get(url, timeout=20)
+                        if response.status_code == 200:
+                            print(f"✅ Berhasil dengan session baru (Size: {len(response.content)} bytes)")
+                            return response
+                    except Exception as e:
+                        print(f"⚠️  Session baru juga gagal: {e}")
+                else:
+                    response.raise_for_status()
 
                 # Cek apakah halaman berhasil dimuat
                 if response.status_code == 200 and len(response.content) > 1000:
@@ -70,12 +173,145 @@ class BlibliScraper:
                 print(f"⚠️  Error pada percobaan {attempt + 1}: {e}")
 
             if attempt < max_retries - 1:
-                wait_time = random.uniform(5, 10)
+                wait_time = random.uniform(8, 15)
                 print(f"⏳ Menunggu {wait_time:.1f} detik sebelum retry...")
                 time.sleep(wait_time)
 
         print("❌ Gagal mengakses halaman setelah beberapa percobaan")
         return None
+
+    def try_alternative_request(self, url):
+        """
+        Mencoba teknik alternatif untuk mengatasi 403 Forbidden
+        """
+        try:
+            # Teknik 1: Gunakan headers yang berbeda
+            alt_headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'same-origin',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+            
+            response = self.session.get(url, headers=alt_headers, timeout=15)
+            if response.status_code == 200:
+                return response
+                
+        except Exception as e:
+            print(f"⚠️  Teknik alternatif 1 gagal: {e}")
+        
+        try:
+            # Teknik 2: Gunakan requests dengan verify=False
+            response = self.session.get(url, verify=False, timeout=15)
+            if response.status_code == 200:
+                return response
+                
+        except Exception as e:
+            print(f"⚠️  Teknik alternatif 2 gagal: {e}")
+        
+        try:
+            # Teknik 3: Coba dengan mobile User-Agent
+            mobile_headers = {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+            
+            response = self.session.get(url, headers=mobile_headers, timeout=15)
+            if response.status_code == 200:
+                return response
+                
+        except Exception as e:
+            print(f"⚠️  Teknik alternatif 3 gagal: {e}")
+        
+        try:
+            # Teknik 4: Coba dengan URL yang berbeda
+            if 'cari' in url:
+                # Coba dengan format URL yang berbeda
+                alt_url = url.replace('/cari/', '/search/')
+                response = self.session.get(alt_url, timeout=15)
+                if response.status_code == 200:
+                    return response
+                    
+        except Exception as e:
+            print(f"⚠️  Teknik alternatif 4 gagal: {e}")
+        
+        try:
+            # Teknik 5: Coba dengan teknik yang lebih advanced
+            advanced_headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'DNT': '1',
+                'Referer': 'https://www.google.com/',
+                'Origin': 'https://www.google.com'
+            }
+            
+            response = self.session.get(url, headers=advanced_headers, timeout=15)
+            if response.status_code == 200:
+                return response
+                
+        except Exception as e:
+            print(f"⚠️  Teknik alternatif 5 gagal: {e}")
+        
+        return None
+
+    def create_new_session(self):
+        """
+        Membuat session baru dengan konfigurasi yang berbeda
+        """
+        new_session = requests.Session()
+        new_session.verify = False
+        
+        # Gunakan User-Agent yang berbeda
+        new_user_agent = random.choice(self.user_agents)
+        
+        new_headers = {
+            'User-Agent': new_user_agent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+        }
+        
+        new_session.headers.update(new_headers)
+        
+        # Tambahkan adapter
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=5,
+            pool_maxsize=5,
+            max_retries=2
+        )
+        new_session.mount('http://', adapter)
+        new_session.mount('https://', adapter)
+        
+        return new_session
 
     def extract_product_data(self, soup):
         """
@@ -401,11 +637,37 @@ class BlibliScraper:
             print(f"📄 MEMPROSES HALAMAN {page}")
             print(f"{'='*60}")
 
-            # Bangun URL untuk halaman
-            current_url = self.build_search_url(keyword, page)
+            # Coba dengan berbagai URL alternatif
+            alternative_urls = self.get_alternative_search_urls(keyword, page)
+            response = None
+            
+            for i, current_url in enumerate(alternative_urls):
+                print(f"🔄 Mencoba URL {i+1}/{len(alternative_urls)}: {current_url}")
+                response = self.get_page_content(current_url)
+                if response:
+                    print(f"✅ Berhasil dengan URL: {current_url}")
+                    break
+                time.sleep(random.uniform(1, 2))
+            
+            # Jika semua URL gagal, coba dengan API endpoint
+            if not response:
+                print("🔄 Mencoba dengan API endpoint...")
+                api_url = self.get_search_api_url(keyword, page)
+                response = self.get_page_content(api_url)
+                
+                if response:
+                    # Jika menggunakan API, parse JSON response
+                    try:
+                        json_data = response.json()
+                        products = self.extract_from_api_response(json_data)
+                        if products:
+                            all_products.extend(products)
+                            print(f"✅ Halaman {page}: {len(products)} produk berhasil diekstrak dari API")
+                            print(f"📊 Total produk terkumpul: {len(all_products)}")
+                            continue
+                    except:
+                        pass
 
-            # Dapatkan konten halaman
-            response = self.get_page_content(current_url)
             if not response:
                 print(f"❌ Gagal mengakses halaman {page}, melanjutkan ke halaman berikutnya...")
                 continue
@@ -443,6 +705,41 @@ class BlibliScraper:
         print(f"\n🎯 SCRAPING SELESAI!")
         print(f"📊 Total produk ditemukan: {len(all_products)}")
         return all_products
+
+    def extract_from_api_response(self, json_data):
+        """
+        Ekstrak data produk dari API response JSON
+        """
+        products = []
+        
+        try:
+            # Coba berbagai struktur JSON yang mungkin
+            if 'data' in json_data:
+                items = json_data['data'].get('products', [])
+            elif 'products' in json_data:
+                items = json_data['products']
+            elif 'items' in json_data:
+                items = json_data['items']
+            else:
+                items = json_data.get('data', [])
+            
+            for item in items:
+                if isinstance(item, dict):
+                    product_data = {
+                        'nama_produk': item.get('name', item.get('title', 'Nama tidak ditemukan')),
+                        'harga': f"Rp {item.get('price', item.get('priceDisplay', 'Harga tidak ditemukan'))}",
+                        'rating': str(item.get('rating', item.get('ratingValue', ''))),
+                        'jumlah_terjual': f"{item.get('soldCount', '0')} terjual" if item.get('soldCount') else '',
+                        'nama_toko': item.get('seller', item.get('merchant', 'Toko tidak ditemukan')),
+                        'link_produk': f"https://www.blibli.com{item.get('url', '')}" if item.get('url') else '',
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                    products.append(product_data)
+                    
+        except Exception as e:
+            print(f"❌ Error parsing API response: {e}")
+            
+        return products
 
     def save_to_csv(self, products, filename=None):
         """
@@ -528,12 +825,13 @@ def main():
     print("🤖 BLIBLI SCRAPER - Versi Diperbaiki")
     print("👨‍💻 Dikembangkan berdasarkan: Tokopedia Scraper")
     print("🔧 Diadaptasi untuk: Website Blibli")
-    print("="*80)
-    print("⚠️  PERINGATAN:")
-    print("   • Gunakan scraper ini dengan bijak dan bertanggung jawab")
-    print("   • Patuhi ketentuan layanan Blibli")
-    print("   • Jangan melakukan scraping berlebihan")
-    print("="*80)
+            print("="*80)
+        print("⚠️  PERINGATAN:")
+        print("   • Gunakan scraper ini dengan bijak dan bertanggung jawab")
+        print("   • Patuhi ketentuan layanan Blibli")
+        print("   • Jangan melakukan scraping berlebihan")
+        print("   • Scraper ini telah dioptimasi untuk mengatasi 403 Forbidden")
+        print("="*80)
 
     # Inisialisasi scraper
     scraper = BlibliScraper()
@@ -602,11 +900,14 @@ def main():
             print(f"   • Struktur website Blibli berubah")
             print(f"   • Koneksi internet bermasalah")
             print(f"   • Anti-bot detection aktif")
+            print(f"   • Website Blibli memblokir akses dari server/cloud")
 
             print(f"\n🔧 SARAN PERBAIKAN:")
             print(f"   • Coba keyword yang lebih umum")
             print(f"   • Periksa koneksi internet")
             print(f"   • Tunggu beberapa saat sebelum mencoba lagi")
+            print(f"   • Coba dari jaringan yang berbeda")
+            print(f"   • Gunakan VPN jika diperlukan")
 
     except KeyboardInterrupt:
         print(f"\n\n⚠️  SCRAPING DIHENTIKAN OLEH USER")
