@@ -1,0 +1,7 @@
+judul_berita,link_berita,tanggal_rilis,detail_konten
+"Berita Pertama","https://kompas.com/berita1","2024-01-15","Konten berita pertama yang panjang dan informatif..."
+"Berita Kedua","Ini bukan URL, ini teks biasa","2024-01-16","Konten berita kedua yang panjang dan informatif..."
+"Berita Ketiga","https://kompas.com/berita3","https://kompas.com/tanggal","Konten berita ketiga yang panjang dan informatif..."
+"Berita Keempat","https://kompas.com/berita4","2024-01-18","15 Januari 2024"
+"Berita Kelima","Ini bukan URL","https://kompas.com/tanggal","Konten berita kelima yang panjang dan informatif..."
+"Berita Keenam","https://kompas.com/berita6","2024-01-20","Konten berita keenam yang panjang dan informatif..."
