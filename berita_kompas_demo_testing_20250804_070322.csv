@@ -1,0 +1,5 @@
+﻿judul_berita,link_berita,tanggal_rilis,detail_konten
+Berita Pertama,https://kompas.com/berita1,2024-01-15,Ini adalah konten berita pertama yang panjang dan informatif.
+Berita Kedua Ini bukan link tapi teks 2024-01-16,Ini adalah konten berita kedua yang juga panjang dan informatif.,,
+Berita Ketiga,https://kompas.com/berita3,Ini adalah konten berita ketiga yang seharusnya dipindah ke tanggal_rilis.,
+Berita Keempat,https://kompas.com/berita4,2024-01-18,
