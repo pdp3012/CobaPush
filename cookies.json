@@ -1,0 +1,22 @@
+[
+  {
+    "name": "session_id",
+    "value": "example_session_value",
+    "domain": ".shopee.co.id",
+    "path": "/",
+    "expirationDate": 1735689600,
+    "sameSite": "Strict",
+    "secure": true,
+    "httpOnly": false
+  },
+  {
+    "name": "user_id",
+    "value": "example_user_id",
+    "domain": ".shopee.co.id",
+    "path": "/",
+    "expirationDate": 1735689600,
+    "sameSite": "Strict",
+    "secure": true,
+    "httpOnly": false
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "keywords": [
+    "laptop gaming",
+    "smartphone android",
+    "headphone wireless",
+    "smartwatch",
+    "camera digital"
+  ],
+  "max_pages_per_keyword": 2,
+  "delay_between_keywords": 15,
+  "output_directory": "hasil_scraping",
+  "headless": true,
+  "cookies_file": "cookies.json"
+}
